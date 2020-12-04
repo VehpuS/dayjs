@@ -63,7 +63,11 @@ export default (o, c, d) => {
       }
     }
     if (withoutSuffix) return out
-    return (isFuture ? loc.future : loc.past).replace('%s', out)
+    const pastOrFuture = isFuture ? loc.future : loc.past
+    if (typeof pastOrFuture === 'function') {
+      return pastOrFuture(out)
+    }
+    return pastOrFuture.replace('%s', out)
   }
 
   function fromTo(input, withoutSuffix, instance, isFrom) {
