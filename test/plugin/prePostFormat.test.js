@@ -2,11 +2,22 @@ import MockDate from 'mockdate'
 // import moment from 'moment'
 import dayjs from '../../src'
 import prePostFormat from '../../src/plugin/prePostFormat'
+import duration from '../../src/plugin/duration'
+import calendar from '../../src/plugin/calendar'
+import objectSupport from '../../src/plugin/objectSupport'
+import customParseFormat from '../../src/plugin/customParseFormat'
+import relativeTime from '../../src/plugin/relativeTime'
 import utc from '../../src/plugin/utc'
 import arraySupport from '../../src/plugin/arraySupport'
+import en from '../../src/locale/en'
 
 dayjs.extend(utc)
+dayjs.extend(customParseFormat)
 dayjs.extend(arraySupport)
+dayjs.extend(objectSupport)
+dayjs.extend(calendar)
+dayjs.extend(duration)
+dayjs.extend(relativeTime)
 dayjs.extend(prePostFormat)
 
 const symbolMap = {
@@ -34,16 +45,47 @@ const numberMap = {
   ')': '0'
 }
 
+const localeCustomizations = {
+  ...en,
+  preparse(string) {
+    if (typeof string !== 'string') {
+      // console.error('preparse - Expected string, got', {
+      //   string
+      // })
+      throw new Error(`preparse - Expected string, got ${typeof string}`)
+    }
+    try {
+      const res = string.replace(/[!@#$%^&*()]/g, match => numberMap[match])
+      // console.log('Called custom preparse', { string, res })
+      return res
+    } catch (error) {
+      const errorMsg = `Unexpected error during preparse of '${string}' - ${error}`
+      // console.error(errorMsg)
+      throw new Error(errorMsg)
+    }
+  },
+  postformat(string) {
+    if (typeof string !== 'string') {
+      // console.error('postformat - Expected string, got', {
+      //   string
+      // })
+      throw new Error(`postformat - Expected string, got ${typeof string}`)
+    }
+    try {
+      const res = string.replace(/\d/g, match => symbolMap[match])
+      // console.log('Called custom postformat', { string, res })
+      return res
+    } catch (error) {
+      const errorMsg = `Unexpected error during postFormat of '${string}' - ${error}`
+      // console.error(errorMsg)
+      throw new Error(errorMsg)
+    }
+  }
+}
+
 beforeEach(() => {
   MockDate.set(new Date())
-  dayjs.locale('symbol', {
-    preparse(string) {
-      return string.replace(/[!@#$%^&*()]/g, match => numberMap[match])
-    },
-    postformat(string) {
-      return string.replace(/\d/g, match => symbolMap[match])
-    }
-  })
+  dayjs.locale('symbol', localeCustomizations)
 })
 
 afterEach(() => {
@@ -54,95 +96,72 @@ afterEach(() => {
 describe('preparse and postformat', () => {
   describe('transform', () => {
     const TEST_DATE = '@)!@-)*-@&'
+    const TEST_NUM = 1346025600
     it('preparse string + format', () =>
-      expect(dayjs.utc(TEST_DATE, 'YYYY-MM-DD').unix()).toBe(1346025600))
+      expect(dayjs.utc(TEST_DATE, 'YYYY-MM-DD').unix()).toBe(TEST_NUM))
     it('preparse ISO8601 string', () =>
-      expect(dayjs.utc(TEST_DATE).unix()).toBe(1346025600))
+      expect(dayjs.utc(TEST_DATE).unix()).toBe(TEST_NUM))
     it('postformat', () =>
-      expect(dayjs.utc().format('YYYY-MM-DD')).toBe(TEST_DATE))
+      expect(dayjs
+        .unix(TEST_NUM)
+        .utc()
+        .format('YYYY-MM-DD'))
+        .toBe(TEST_DATE))
   })
 
   describe('transform from', () => {
+    dayjs.locale('symbol', localeCustomizations)
     const start = dayjs([2007, 1, 28])
-    it('postformat should work on moment.fn.from', () =>
-      expect(start.from(dayjs([2007, 1, 28]).add({ s: 90 }), true)).toBe('@ minutes'))
 
-    it('postformat should work on moment.fn.fromNow', () =>
-      expect(dayjs()
-        .add(6, 'd')
-        .fromNow(true)).toBe('^ days'))
+    const t1 = dayjs([2007, 1, 28]).add({ s: 90 })
+    it('postformat should work on dayjs.fn.from', () =>
+      expect(start.from(t1, true)).toBe('@ minutes'))
 
-    it('postformat should work on moment.duration.fn.humanize', () =>
+    const t2 = dayjs().add(6, 'd')
+    it('postformat should work on dayjs.fn.fromNow', () =>
+      expect(t2.fromNow(true)).toBe('^ days'))
+
+    it('postformat should work on dayjs.duration.fn.humanize', () =>
       expect(dayjs.duration(10, 'h').humanize()).toBe('!) hours'))
   })
 })
 
-// test('transform from', (assert) => {
-//   const start = moment([2007, 1, 28])
+describe('calendar day', () => {
+  const a = dayjs()
+    .hour(12)
+    .minute(0)
+    .second(0)
 
-//   assert.equal(
-//     start.from(moment([2007, 1, 28]).add({ s: 90 }), true),
-//     '@ minutes',
-//     'postformat should work on moment.fn.from'
-//   )
-//   assert.equal(
-//     moment()
-//       .add(6, 'd')
-//       .fromNow(true),
-//     '^ days',
-//     'postformat should work on moment.fn.fromNow'
-//   )
-//   assert.equal(
-//     moment.duration(10, 'h').humanize(),
-//     '!) hours',
-//     'postformat should work on moment.duration.fn.humanize'
-//   )
-// })
+  it('today at the same time', () =>
+    expect(dayjs(a).calendar()).toBe('Today at !@:)) PM'))
 
-// test('calendar day', (assert) => {
-//   const a = moment()
-//     .hours(12)
-//     .minutes(0)
-//     .seconds(0)
+  it('Now plus 25 min', () =>
+    expect(dayjs(a)
+      .add({ m: 25 })
+      .calendar())
+      .toBe('Today at !@:@% PM'))
 
-//   assert.equal(
-//     moment(a).calendar(),
-//     'Today at !@:)) PM',
-//     'today at the same time'
-//   )
-//   assert.equal(
-//     moment(a)
-//       .add({ m: 25 })
-//       .calendar(),
-//     'Today at !@:@% PM',
-//     'Now plus 25 min'
-//   )
-//   assert.equal(
-//     moment(a)
-//       .add({ h: 1 })
-//       .calendar(),
-//     'Today at !:)) PM',
-//     'Now plus 1 hour'
-//   )
-//   assert.equal(
-//     moment(a)
-//       .add({ d: 1 })
-//       .calendar(),
-//     'Tomorrow at !@:)) PM',
-//     'tomorrow at the same time'
-//   )
-//   assert.equal(
-//     moment(a)
-//       .subtract({ h: 1 })
-//       .calendar(),
-//     'Today at !!:)) AM',
-//     'Now minus 1 hour'
-//   )
-//   assert.equal(
-//     moment(a)
-//       .subtract({ d: 1 })
-//       .calendar(),
-//     'Yesterday at !@:)) PM',
-//     'yesterday at the same time'
-//   )
-// })
+  it('Now plus 1 hour', () =>
+    expect(dayjs(a)
+      .add({ h: 1 })
+      .calendar())
+      .toBe('Today at !:)) PM'))
+
+  it('tomorrow at the same time', () =>
+    expect(dayjs(a)
+      .add({ d: 1 })
+      .calendar())
+      .toBe('Tomorrow at !@:)) PM'))
+
+  it('Now minus 1 hour', () =>
+    expect(dayjs(a)
+      .subtract({ h: 1 })
+      .calendar())
+      .toBe('Today at !!:)) AM'))
+
+  it('yesterday at the same time', () =>
+    expect(dayjs(a)
+      .subtract({ d: 1 })
+      .calendar())
+      .toBe('Yesterday at !@:)) PM'))
+})

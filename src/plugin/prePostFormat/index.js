@@ -1,33 +1,53 @@
+import localeData from '../localeData'
+
 // Plugin template from https://day.js.org/docs/en/plugin/plugin
+export default (option, dayjsClass, dayjsFactory) => {
+  // This plugin depends on other plugins - so I will import them here
+  // equivalent to dayjsClass.extend(duration)
+  localeData(option, dayjsClass, dayjsFactory)
 
-// https://github.com/moment/moment/blob/develop/src/lib/moment/format.js
-// https://github.com/moment/moment/blob/e047716131e9f1650504a194b11b5405b098c603/src/test/moment/preparse_postformat.js
-// https://github.com/moment/moment/blob/b7ec8e2ec068e03de4f832f28362675bb9e02261/moment.js
-// https://github.com/moment/moment/blob/develop/src/locale/ar.js
-
-// https://github.com/iamkun/dayjs/blob/dev/src/locale/ar.js
-
-export default (
-  option,
-  dayjsClass
-  // dayjsFactory
-) => {
-  // extend dayjs()
-  // e.g. add dayjs().isSameOrBefore()
-  dayjsClass.prototype.test = function () {
-    console.log('HELLO WORLD')
+  const oldParse = dayjsClass.prototype.parse
+  dayjsClass.prototype.parse = function (cfg) {
+    if (typeof cfg.date === 'string') {
+      const locale = this.$locale()
+      cfg.date =
+        locale && locale.preparse ? locale.preparse(cfg.date) : cfg.date
+    }
+    // original parse result
+    return oldParse.bind(this)(cfg)
   }
-
-  // extend dayjs
-  // e.g. add dayjs.utc()
-  // dayjsFactory.utc = arguments => {}
 
   // // overriding existing API
   // // e.g. extend dayjs().format()
-  // const oldFormat = dayjsClass.prototype.format
-  // dayjsClass.prototype.format = function(arguments) {
-  //   // original format result
-  //   const result = oldFormat.bind(this)(arguments)
-  //   // return modified result
-  // }
+  const oldFormat = dayjsClass.prototype.format
+  dayjsClass.prototype.format = function (...args) {
+    // original format result
+    const result = oldFormat.call(this, ...args)
+    // return modified result
+    const locale = this.$locale()
+    return locale.postformat ? locale.postformat(result) : result
+  }
+
+  const oldFromTo = dayjsClass.prototype.fromToBase
+
+  if (oldFromTo) {
+    dayjsClass.prototype.fromToBase = function (
+      input,
+      withoutSuffix,
+      instance,
+      isFrom
+    ) {
+      const locale = this.$locale() || instance.$locale()
+
+      // original format result
+      return oldFromTo.call(
+        this,
+        input,
+        withoutSuffix,
+        instance,
+        isFrom,
+        locale.postformat
+      )
+    }
+  }
 }
